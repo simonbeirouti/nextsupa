@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Button } from "../ui/button";
+import { Button } from "@workspace/ui/components/button";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { LogoutButton } from "./logout-button";
 

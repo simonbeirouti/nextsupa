@@ -1,38 +1,44 @@
-import type { Metadata } from "next";
-import { Geist, Roboto_Slab } from "next/font/google";
-import { ThemeProvider } from "next-themes";
-import "./globals.css";
-import { cn } from "@/lib/utils";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import Nav from "@/components/nav";
-import { AppProviders } from "@/components/providers/app-providers";
+import type { Metadata } from "next"
+import { Geist, Roboto_Slab } from "next/font/google"
+import { ThemeProvider } from "next-themes"
+import "@workspace/ui/globals.css"
+import { TooltipProvider } from "@workspace/ui/components/tooltip"
+import { cn } from "@workspace/ui/lib/utils"
+import Nav from "@/components/nav"
+import { AppProviders } from "@/components/providers/app-providers"
 
-const robotoSlab = Roboto_Slab({ subsets: ['latin'], variable: '--font-serif' });
+const robotoSlab = Roboto_Slab({ subsets: ["latin"], variable: "--font-serif" })
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+  : "http://localhost:3000"
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "AutoBot",
   description: "The fastest way to build apps with AutoBot",
-};
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   display: "swap",
   subsets: ["latin"],
-});
+})
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn("font-serif", robotoSlab.variable)}>
-      <body className={`${geistSans.className} h-screen overflow-hidden antialiased`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn("font-serif", robotoSlab.variable)}
+    >
+      <body
+        className={`${geistSans.className} h-screen overflow-hidden antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -50,5 +56,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }
