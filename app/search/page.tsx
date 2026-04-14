@@ -2,7 +2,7 @@ import Link from "next/link"
 import { connection } from "next/server"
 
 import { Badge } from "@workspace/ui/components/badge"
-import { buttonVariants } from "@workspace/ui/components/button"
+import { Button, buttonVariants } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
@@ -22,6 +22,10 @@ import { Separator } from "@workspace/ui/components/separator"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { SearchControls } from "@/app/search/_components/search-controls"
+import {
+  importFigshareArticleAction,
+  queueFigshareSearchSyncAction,
+} from "@/app/search/actions"
 import {
   buildSearchHref,
   parseSearchState,
@@ -85,7 +89,10 @@ function ResultsSummary({
     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
       <span>
         Showing {results.length} public result{results.length === 1 ? "" : "s"}{" "}
-        for <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span>
+        for{" "}
+        <span className="font-medium text-foreground">
+          &ldquo;{query}&rdquo;
+        </span>
       </span>
       <span aria-hidden="true" className="text-border">
         /
@@ -125,7 +132,7 @@ function ResultCard({
       <Link
         href={href}
         scroll={false}
-        className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute inset-0 z-10 rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span className="sr-only">Preview {article.title}</span>
       </Link>
@@ -135,7 +142,9 @@ function ResultCard({
           <Badge variant="secondary">
             {getFigshareArticleTypeLabel(article.defined_type)}
           </Badge>
-          {publishedDate ? <Badge variant="outline">{publishedDate}</Badge> : null}
+          {publishedDate ? (
+            <Badge variant="outline">{publishedDate}</Badge>
+          ) : null}
           {isSelected ? <Badge>Previewing</Badge> : null}
         </div>
 
@@ -152,12 +161,22 @@ function ResultCard({
       </CardHeader>
 
       <CardContent className="flex flex-wrap items-center gap-2 text-sm">
+        <form action={importFigshareArticleAction} className="relative z-20">
+          <input type="hidden" name="articleId" value={article.id} />
+          <Button type="submit" variant="secondary" size="sm">
+            Import to backend
+          </Button>
+        </form>
+
         {doiUrl ? (
           <a
             href={doiUrl}
             target="_blank"
             rel="noreferrer"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "relative z-20")}
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "relative z-20"
+            )}
           >
             DOI
           </a>
@@ -170,7 +189,10 @@ function ResultCard({
             href={articleUrl}
             target="_blank"
             rel="noreferrer"
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "relative z-20")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "relative z-20"
+            )}
           >
             Open in Figshare
           </a>
@@ -194,7 +216,9 @@ function PreviewPane({ article }: { article: FigshareArticle }) {
           <Badge variant="secondary">
             {getFigshareArticleTypeLabel(article.defined_type)}
           </Badge>
-          {publishedDate ? <Badge variant="outline">{publishedDate}</Badge> : null}
+          {publishedDate ? (
+            <Badge variant="outline">{publishedDate}</Badge>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -211,6 +235,20 @@ function PreviewPane({ article }: { article: FigshareArticle }) {
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="flex flex-wrap gap-2 text-sm">
+          <form action={importFigshareArticleAction}>
+            <input type="hidden" name="articleId" value={article.id} />
+            <Button type="submit" size="sm">
+              Import to backend
+            </Button>
+          </form>
+
+          <Link
+            href="/ingestion"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            View ingestion
+          </Link>
+
           {articleUrl ? (
             <a
               href={articleUrl}
@@ -276,7 +314,9 @@ export default async function SearchPage({ searchParams }: PageProps) {
       const response = await searchFigshareArticles(state.query, {
         page: state.page,
         pageSize: state.pageSize,
-        itemType: state.itemType ? Number.parseInt(state.itemType, 10) : undefined,
+        itemType: state.itemType
+          ? Number.parseInt(state.itemType, 10)
+          : undefined,
         order: state.order,
         orderDirection: state.direction,
         publishedSince: state.publishedSince || undefined,
@@ -333,17 +373,51 @@ export default async function SearchPage({ searchParams }: PageProps) {
         <Card className="flex min-h-0 flex-1 flex-col border border-border/70 bg-card/80 shadow-sm backdrop-blur-sm">
           <CardHeader className="gap-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              {state.query && !errorMessage ? (
-                <ResultsSummary
-                  query={state.query}
-                  page={state.page}
-                  pageSize={state.pageSize}
-                  results={results}
-                  hasMore={hasMore}
-                />
-              ) : (
-                <CardTitle>Results</CardTitle>
-              )}
+              <div className="space-y-3">
+                {state.query && !errorMessage ? (
+                  <ResultsSummary
+                    query={state.query}
+                    page={state.page}
+                    pageSize={state.pageSize}
+                    results={results}
+                    hasMore={hasMore}
+                  />
+                ) : (
+                  <CardTitle>Results</CardTitle>
+                )}
+
+                {state.query ? (
+                  <form
+                    action={queueFigshareSearchSyncAction}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <input type="hidden" name="query" value={state.query} />
+                    <input
+                      type="hidden"
+                      name="itemType"
+                      value={state.itemType}
+                    />
+                    <input type="hidden" name="order" value={state.order} />
+                    <input
+                      type="hidden"
+                      name="direction"
+                      value={state.direction}
+                    />
+                    <input
+                      type="hidden"
+                      name="publishedSince"
+                      value={state.publishedSince}
+                    />
+                    <Button type="submit" variant="secondary" size="sm">
+                      Ingest all matching results
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Creates a crawl run that walks the full query from latest
+                      to oldest in the backend.
+                    </span>
+                  </form>
+                ) : null}
+              </div>
 
               {state.query ? (
                 <div className="flex flex-wrap gap-2">
@@ -381,29 +455,31 @@ export default async function SearchPage({ searchParams }: PageProps) {
             {errorMessage ? (
               <Card className="border-destructive/30 bg-destructive/5">
                 <CardHeader>
-                  <CardTitle className="text-destructive">Search failed</CardTitle>
+                  <CardTitle className="text-destructive">
+                    Search failed
+                  </CardTitle>
                   <CardDescription>{errorMessage}</CardDescription>
                 </CardHeader>
               </Card>
             ) : null}
 
             {!errorMessage && !state.query ? (
-              <Empty className="h-full min-h-[16rem] border-border/70 bg-card/60 py-16">
+              <Empty className="h-full min-h-64 border-border/70 bg-card/60 py-16">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <span className="text-sm font-medium">Q</span>
                   </EmptyMedia>
                   <EmptyTitle>Search is ready</EmptyTitle>
                   <EmptyDescription>
-                    Start with a public query and the results list will stay here
-                    while the selected record opens in the preview pane.
+                    Start with a public query and the results list will stay
+                    here while the selected record opens in the preview pane.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : null}
 
             {!errorMessage && state.query && results.length === 0 ? (
-              <Empty className="h-full min-h-[16rem] border-border/70 bg-card/60 py-16">
+              <Empty className="h-full min-h-64 border-border/70 bg-card/60 py-16">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <span className="text-sm font-medium">0</span>
@@ -456,7 +532,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
         {selectedArticle ? (
           <PreviewPane article={selectedArticle} />
         ) : (
-          <Empty className="h-full min-h-[24rem] border border-border/70 bg-card/60 py-16">
+          <Empty className="h-full min-h-96 border border-border/70 bg-card/60 py-16">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <span className="text-sm font-medium">P</span>

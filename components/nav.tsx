@@ -12,6 +12,7 @@ export default function Nav() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/search">Search</Link>
+          <Link href="/ingestion">Ingestion</Link>
           <Suspense fallback={null}>
             <AuthButton />
           </Suspense>

@@ -3,6 +3,7 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import {
   createContext,
+  startTransition,
   useContext,
   useEffect,
   useEffectEvent,
@@ -48,12 +49,24 @@ export function AuthProvider({
 }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isMountedRef = useRef(false);
   const previousUserIdRef = useRef<string | null>(null);
-  const syncSessionPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
 
+  const persistUser = useEffectEvent((nextUser: AuthUser | null) => {
+    const persistenceTask = nextUser ? setCachedAuthUser(nextUser) : clearCachedAuthUser();
+
+    void persistenceTask.catch((error) => {
+      console.error("Failed to persist auth user", error);
+    });
+  });
+
   const applySession = useEffectEvent(
-    async ({ refreshServer, session }: { refreshServer: boolean; session: Session | null }) => {
+    ({ refreshServer, session }: { refreshServer: boolean; session: Session | null }) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+
       const nextUser = mapUser(session?.user ?? null);
       const previousUserId = previousUserIdRef.current;
       const nextUserId = nextUser?.id ?? null;
@@ -62,50 +75,40 @@ export function AuthProvider({
       previousUserIdRef.current = nextUserId;
       setUser(nextUser);
       setIsLoading(false);
-
-      if (nextUser) {
-        await setCachedAuthUser(nextUser);
-      } else {
-        await clearCachedAuthUser();
-      }
+      persistUser(nextUser);
 
       if (refreshServer && (userChanged || (!nextUserId && previousUserId))) {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     },
   );
 
-  const syncSession = useEffectEvent(async (refreshServer: boolean) => {
-    if (syncSessionPromiseRef.current) {
-      await syncSessionPromiseRef.current;
+  const hydrateCachedUser = useEffectEvent(async () => {
+    try {
+      const cachedUser = await getCachedAuthUser();
+
+      if (!isMountedRef.current || !cachedUser) {
+        return;
+      }
+
+      previousUserIdRef.current = cachedUser.id;
+      setUser(cachedUser);
+    } catch (error) {
+      console.error("Failed to hydrate cached auth user", error);
       return;
     }
-
-    syncSessionPromiseRef.current = (async () => {
-      try {
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        await applySession({ refreshServer, session });
-      } finally {
-        setIsLoading(false);
-        syncSessionPromiseRef.current = null;
-      }
-    })();
-
-    await syncSessionPromiseRef.current;
   });
 
   const handleAuthStateChange = useEffectEvent(
-    async (event: AuthChangeEvent, session: Session | null) => {
+    (event: AuthChangeEvent, session: Session | null) => {
       const shouldRefreshServer =
         event === "SIGNED_IN" ||
         event === "SIGNED_OUT" ||
         event === "USER_UPDATED";
 
-      await applySession({
+      applySession({
         refreshServer: shouldRefreshServer,
         session,
       });
@@ -113,29 +116,22 @@ export function AuthProvider({
   );
 
   useEffect(() => {
+    isMountedRef.current = true;
     const supabase = createClient();
 
-    void (async () => {
-      const cachedUser = await getCachedAuthUser();
-
-      if (cachedUser) {
-        previousUserIdRef.current = cachedUser.id;
-        setUser(cachedUser);
-      }
-
-      await syncSession(false);
-    })();
+    void hydrateCachedUser();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      void handleAuthStateChange(event, session);
+      handleAuthStateChange(event, session);
     });
 
     return () => {
+      isMountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [handleAuthStateChange, syncSession]);
+  }, []);
 
   return <AuthContext.Provider value={{ isLoading, user }}>{children}</AuthContext.Provider>;
 }

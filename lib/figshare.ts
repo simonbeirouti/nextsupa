@@ -1,7 +1,4 @@
-const BACKEND_URL =
-  process.env.BACKEND_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_URL ??
-  "http://localhost:4000"
+import { fetchBackendJson } from "@/lib/backend"
 
 const FIGSHARE_ITEM_TYPE_LABELS: Record<number, string> = {
   1: "Figure",
@@ -125,23 +122,7 @@ export async function searchFigshareArticles(
     params.set("publishedSince", options.publishedSince)
   }
 
-  const response = await fetch(
-    `${BACKEND_URL}/api/v1/figshare/search?${params.toString()}`,
-    {
-      cache: "no-store",
-    }
+  return fetchBackendJson<FigshareSearchResponse>(
+    `/api/v1/figshare/search?${params.toString()}`
   )
-
-  if (!response.ok) {
-    let message = "Figshare backend search failed."
-
-    try {
-      const payload = (await response.json()) as { message?: string }
-      message = payload.message ?? message
-    } catch {}
-
-    throw new Error(message)
-  }
-
-  return (await response.json()) as FigshareSearchResponse
 }

@@ -13,9 +13,9 @@ It is a **Next.js frontend** that integrates with the dedicated backend platform
 Build a frontend application that lets researchers:
 
 1. search and browse Figshare-backed content through backend APIs
-2. select records for import into their private research workspace
+2. turn a topic search into a long-running ingestion run across all matching records
 3. inspect ingestion and retrieval state without needing backend knowledge
-4. ask questions against imported material with visible citations
+4. ask questions against imported material after it has been processed into vectors
 5. save useful outputs into a report-oriented workflow
 
 ---
@@ -29,6 +29,7 @@ That creates the wrong product boundary.
 The frontend should instead optimize for:
 
 - clear search and selection flows
+- clear topic-ingestion initiation flows
 - predictable route-driven research workflows
 - transparent source and citation inspection
 - responsive session state across search, chat, and reporting
@@ -44,6 +45,7 @@ Without that separation, the app risks duplicating backend responsibilities, lea
 
 - Position FigJam as the dedicated frontend for the research workflow
 - Provide a strong search and selection UX for Figshare-backed content
+- Let a researcher search for a topic and start ingestion for the full matching corpus
 - Expose ingestion and retrieval progress in researcher-friendly terms
 - Support citation-aware chat and source inspection
 - Support report assembly and export initiation from saved outputs
@@ -84,9 +86,9 @@ Those responsibilities belong in `apps/backend`.
 ### Core Jobs To Be Done
 
 - find relevant source material quickly
-- understand what has or has not been imported
+- understand what has or has not been crawled, imported, downloaded, parsed, or embedded
 - explore source details before committing to ingestion
-- ask questions and trace answers back to source evidence
+- ask questions and trace answers back to source evidence after ingestion is ready
 - collect useful findings into a shareable report draft
 
 ---
@@ -131,6 +133,7 @@ The app should provide:
 The app should provide:
 
 - explicit import actions that call backend import endpoints
+- a topic-ingestion action that can enqueue all matching search results
 - progress and status messaging after import is requested
 - a clear transition from discovery into the research workspace
 
@@ -138,7 +141,7 @@ The app should provide:
 
 The app should provide:
 
-- a workspace for asking questions against imported material
+- a workspace for asking questions against ingested and vectorized material
 - conversation history tied to the active research context
 - citation-aware responses
 - filters or scoping controls when multiple imported sources exist
@@ -197,6 +200,9 @@ The frontend should be designed around backend endpoints such as:
 
 - `GET /api/v1/figshare/search`
 - `POST /api/v1/figshare/import`
+- `POST /api/v1/figshare/sync`
+- `GET /api/v1/crawl-runs`
+- `GET /api/v1/crawl-runs/:id`
 - `GET /api/v1/source-items`
 - `GET /api/v1/source-items/:id`
 - `GET /api/v1/jobs/:id`
@@ -206,6 +212,7 @@ The frontend should be designed around backend endpoints such as:
 The exact response shapes may evolve, but the frontend should assume:
 
 - search returns normalized source item summaries
+- topic sync returns a durable crawl run reference such as crawl-run IDs or job IDs
 - item detail returns normalized metadata and file information
 - import returns a durable backend reference such as item IDs or job IDs
 - chat returns answer content plus citation metadata suitable for inline linking
@@ -215,17 +222,18 @@ The exact response shapes may evolve, but the frontend should assume:
 
 ## 11. Functional Requirements
 
-| ID | Requirement | Priority | Integration |
-| :--- | :--- | :--- | :--- |
-| **FR-1** | Search Figshare-backed records through backend APIs. | P0 | `GET /api/v1/figshare/search` |
-| **FR-2** | Preview source metadata before import. | P0 | `GET /api/v1/source-items/:id` or search detail payload |
-| **FR-3** | Select one or many records and request import. | P0 | `POST /api/v1/figshare/import` |
-| **FR-4** | Display import and ingestion state in clear UI terms. | P0 | source item + job status endpoints |
-| **FR-5** | Support multi-turn chat within a chosen research context. | P1 | `POST /api/v1/chat` |
-| **FR-6** | Render inline citations and open a source inspector. | P1 | citation metadata from chat/retrieval APIs |
-| **FR-7** | Save useful outputs into a report-building flow. | P1 | frontend state plus backend persistence later |
-| **FR-8** | Show references associated with saved outputs. | P1 | citation metadata from backend |
-| **FR-9** | Initiate report export and communicate export status. | P2 | backend export endpoint later |
+| ID        | Requirement                                                                        | Priority | Integration                                             |
+| :-------- | :--------------------------------------------------------------------------------- | :------- | :------------------------------------------------------ |
+| **FR-1**  | Search Figshare-backed records through backend APIs.                               | P0       | `GET /api/v1/figshare/search`                           |
+| **FR-2**  | Preview source metadata before import.                                             | P0       | `GET /api/v1/source-items/:id` or search detail payload |
+| **FR-3**  | Start a topic-level ingestion run for all matching records.                        | P0       | `POST /api/v1/figshare/sync`                            |
+| **FR-4**  | Select one or many records and request targeted import.                            | P0       | `POST /api/v1/figshare/import`                          |
+| **FR-5**  | Display crawl, import, and ingestion state in clear UI terms.                      | P0       | crawl run + source item + job status endpoints          |
+| **FR-6**  | Support multi-turn chat within a chosen research context after ingestion is ready. | P1       | `POST /api/v1/chat`                                     |
+| **FR-7**  | Render inline citations and open a source inspector.                               | P1       | citation metadata from chat/retrieval APIs              |
+| **FR-8**  | Save useful outputs into a report-building flow.                                   | P1       | frontend state plus backend persistence later           |
+| **FR-9**  | Show references associated with saved outputs.                                     | P1       | citation metadata from backend                          |
+| **FR-10** | Initiate report export and communicate export status.                              | P2       | backend export endpoint later                           |
 
 ---
 
@@ -246,6 +254,7 @@ The exact response shapes may evolve, but the frontend should assume:
 ### 12.3 Status Communication
 
 - Backend-specific statuses should be translated into researcher-friendly copy.
+- The app should distinguish at least: crawl queued, crawling, metadata stored, files downloading, parsing, embedding, ready, and failed.
 - Failed or partial imports must provide actionable retry or refresh paths when backend support exists.
 
 ### 12.4 Citation Interaction
@@ -260,7 +269,9 @@ The exact response shapes may evolve, but the frontend should assume:
 Suggested top-level surfaces:
 
 - **Search**
-  - query, filters, results, preview, import actions
+  - query, filters, results, preview, import actions, start-ingestion action
+- **Ingestion**
+  - crawl runs, source-item progress, job visibility, failure/retry controls
 - **Workspace**
   - active source context, chat, citations, source inspector
 - **Report**
@@ -298,6 +309,7 @@ The exact route structure can evolve, but it should preserve:
 - search page and result list
 - item preview
 - import actions
+- topic-ingestion actions
 - ingestion state visibility
 
 ### Phase 2: Research Workspace
@@ -320,8 +332,9 @@ The exact route structure can evolve, but it should preserve:
 The FigJam frontend is successful for v1 when:
 
 - researchers can search normalized Figshare-backed content from the app
-- selected items can be imported through backend APIs
-- the app clearly shows whether imported items are processing, ready, or failed
+- a topic query can be turned into a durable ingestion run through backend APIs
+- selected items can still be imported through backend APIs when needed
+- the app clearly shows whether crawl runs and imported items are processing, ready, or failed
 - users can ask questions in a research workspace tied to imported material
 - answers include inspectable citations
 - users can collect useful outputs into a report-oriented surface
@@ -334,6 +347,7 @@ The FigJam frontend is successful for v1 when:
 ### Product Risks
 
 - unclear backend status mapping could make the workflow feel unreliable
+- long-running crawls could feel stalled if progress is not updated clearly
 - chat answers may feel untrustworthy if citation UI is weak even when backend data is correct
 - search-to-workspace transitions may feel fragmented if route state is poorly designed
 
@@ -361,10 +375,15 @@ Treat FigJam as the **research workflow frontend** and `apps/backend` as the **p
 
 Implement the frontend in this order:
 
-1. search and import UX
-2. workspace and citation inspection
-3. report assembly and export UX
+1. search and topic-ingestion UX
+2. ingestion monitoring and transition into workspace
+3. workspace and citation inspection
+4. report assembly and export UX
 
 The key product rule is:
 
 **the frontend should make backend capabilities usable, legible, and trustworthy without reimplementing them.**
+
+The key workflow rule is:
+
+**a researcher should be able to start with a topic search, monitor the ingestion run over time, and only then speak to an agent against the ingested corpus.**
